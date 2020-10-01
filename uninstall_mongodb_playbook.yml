@@ -1,0 +1,16 @@
+---
+- name: Uninstall Mongo
+  remote_user: root
+  hosts: mongoCluster
+  tasks:
+    - name: STOP SERVICE
+      systemd:
+        name: mongod
+        state: stopped
+    - name: REMOVE PACKASGES
+      # command: yum erase $(rpm -qa | grep mongodb-org)
+      yum:
+        name: mongodb-org
+        state: absent
+    - name: REMOVE DATA DIRECTORY
+      command: rm -r /data

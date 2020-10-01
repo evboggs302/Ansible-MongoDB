@@ -1,0 +1,124 @@
+---
+# This playbook was created with the understanding all nodes in cluster are running Centos8.
+#
+# Setting up and installing IAP dependencies.
+- name: Node OS Setup
+  hosts: mongoCluster
+  remote_user: root
+  tasks:
+    - name: DISABLE THP # will improve database performance
+      copy:
+        src: #
+        dest: /etc/systemd/system/disable-transparent-huge-pages.service
+    - name: UPDATE CENTOS REPOS FILES (1/3)
+      lineinfile:
+        path: /etc/yum.repos.d/CentOS-Base.repo
+        regex: "^mirrorlist:"
+        line: mirrorlist=http://mirrorlist.centos.org/?release=8&arch=x86_64&repo=BaseOS
+    - name: UPDATE CENTOS REPOS FILES (2/3)
+      lineinfile:
+        path: /etc/yum.repos.d/CentOS-AppStream.repo
+        regex: "^mirrorlist:"
+        line: mirrorlist=http://mirrorlist.centos.org/?release=8&arch=x86_64&repo=AppStream
+    - name: UPDATE CENTOS REPOS FILES (3/3)
+      lineinfile:
+        path: /etc/yum.repos.d/CentOS-Extras.repo
+        regex: "^mirrorlist:"
+        line: mirrorlist=http://mirrorlist.centos.org/?release=8&arch=x86_64&repo=BaseOS
+    - name: RELOAD SYSTEMD UNIT FILE
+      systemd:
+        daemon_reload: yes
+        force: yes
+    - name: START THE SERVICE
+      systemd:
+        state: started
+        name: disable-transparent-huge-pages
+        force: yes
+        masked: no
+    - name: ENABLE THE SERVICE
+      systemd:
+        enabled: yes
+        name: disable-transparent-huge-pages
+        force: yes
+        masked: no
+    - name: ADJUST SOFT ULIMIT (nproc / nofile)
+      command: ulimit -u 32000 -n 64000
+#
+#
+# Setting up and installing MongoDB dependencies.
+- name: MongoDB Setup
+  hosts: mongoCluster
+  remote_user: root
+  tasks:
+    - name: PRE-WORK FOR MONGODB INSTALL (1/3)
+      file:
+        path: /etc/resolv.conf
+        state: touch
+    - name: PRE-WORK FOR MONGODB INSTALL (2/3)
+      lineinfile:
+        path: /etc/resolv.conf
+        line: "nameserver 8.8.8.8"
+        state: present
+        insertbefore: BOF
+    - name: PRE-WORK FOR MONGODB INSTALL (3/3)
+      lineinfile:
+        path: /etc/resolv.conf
+        line: "nameserver 8.8.4.4"
+        state: present
+        insertbefore: BOF
+    - name: DOWNLOAD MONGODB REPO FILE
+      copy:
+        src:
+        dest: /etc/yum.repos.d/mongodb-org-4.4.repo
+    - name: YUM TEST/UPDATE
+      yum:
+        name: "*"
+        state: latest
+    - name: INSTALL MONGODB & IAP DEPENDS
+      yum:
+        name:
+          - mongodb-org
+          - numactl
+          - tuned
+          - tuned-utils
+          - xfsprogs
+        state: present
+    - name: REMOVE DEFUALT CONFIG FILE
+      file:
+        path: /etc/mongod.conf
+        state: absent
+    - name: CREATE NEW CONFIG FILE
+      copy:
+        src: #
+        dest: /etc/mongod.conf
+        owner: mongod
+        group: mongod
+    - name: COPY KEYFILE TO NODE
+      copy:
+        src: #
+        dest: /var/log/mongodb/<file name> #
+        mode: "400"
+        owner: mongod
+        group: mongod
+    - name: UPDATE FIREWALL PORTS
+      command: firewall-cmd --permanent --add-port=27017/tcp
+    - name: RELOAD FIREWALL
+      command: firewall-cmd --reload
+#
+#
+# Starting mongod serviceon each node
+- name: Starting MongoDB
+  hosts: mongoCluster
+  remote_user: root
+  tasks:
+    - name: RESTART DAEMON
+      systemd:
+        daemon_reload: yes
+    - name: START MONGOD SERVICE
+      systemd:
+        state: started
+        name: mongod
+    - name: ENABLE MONGOD SERVICE
+      command: systemctl enable mongod
+    - name: MONGOD SERVICE STARTS ON REBOOT
+      command: chkconfig mongod on

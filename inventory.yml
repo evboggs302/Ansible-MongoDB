@@ -1,0 +1,6 @@
+all:
+  children:
+    masterNode:
+      hosts: <list master node ip>
+    mongoCluster:
+      hosts: <list ips for machines>

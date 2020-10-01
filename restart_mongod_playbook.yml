@@ -1,0 +1,16 @@
+---
+- name: Restart Mongo Service
+  hosts: mongoCluster
+  remote_user: root
+  tasks:
+    - name: STOP SERVICE
+      systemd:
+        state: stopped
+        name: mongod
+    - name: RELOAD DAEMON
+      systemd:
+        daemon_reload: yes
+    - name: RESTART MONGOD
+      systemd:
+        name: mongod
+        state: started
